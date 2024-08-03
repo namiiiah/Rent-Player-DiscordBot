@@ -63,12 +63,12 @@ class MainView(nextcord.ui.View):
 class BookingModal(nextcord.ui.Modal):
     def __init__(self):
         super().__init__(title="Booking Information")
-        self.player_name = nextcord.ui.TextInput(label="Your Name", placeholder="Enter your name")
+        self.player_username = nextcord.ui.TextInput(label="Player's Discord Username", placeholder="Enter player's Discord username")
         self.duoer_name = nextcord.ui.TextInput(label="Duoer Name", placeholder="Enter duoer's name")
         self.rent_hours = nextcord.ui.TextInput(label="Rent Hours", placeholder="Enter number of hours")
         self.rent_time = nextcord.ui.TextInput(label="Rent Time", placeholder="Enter rent time (DD/MM/YYYY HH:MM)")
         
-        self.add_item(self.player_name)
+        self.add_item(self.player_username)
         self.add_item(self.duoer_name)
         self.add_item(self.rent_hours)
         self.add_item(self.rent_time)
@@ -76,9 +76,22 @@ class BookingModal(nextcord.ui.Modal):
     async def callback(self, interaction: nextcord.Interaction):
         try:
             db = get_database_connection()
+            
+            # Check if the entered username matches the interaction user
+            if self.player_username.value.lower() == interaction.user.name.lower():
+                player_id = str(interaction.user.id)
+            else:
+                # Try to find the player by username
+                player = await interaction.guild.fetch_member_named(self.player_username.value)
+                if player:
+                    player_id = str(player.id)
+                else:
+                    await interaction.response.send_message("Player not found. Please check the username and try again.")
+                    return
+
             db.Players.update_one(
-                {'PlayerID': str(interaction.user.id)},
-                {'$set': {'PlayerName': self.player_name.value}},
+                {'PlayerID': player_id},
+                {'$set': {'PlayerName': self.player_username.value}},
                 upsert=True
             )
             player_id = str(interaction.user.id)
