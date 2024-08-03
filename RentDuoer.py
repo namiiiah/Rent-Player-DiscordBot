@@ -74,26 +74,31 @@ class BookingModal(nextcord.ui.Modal):
         self.add_item(self.rent_time)
 
     async def callback(self, interaction: nextcord.Interaction):
-        try:
-            db = get_database_connection()
+    try:
+        db = get_database_connection()
+        
+        # Check if the entered username matches the interaction user
+        if self.player_username.value.lower() == interaction.user.name.lower():
+            player_id = str(interaction.user.id)
+        else:
+            # Try to find the player by username
+            player = None
+            for member in interaction.guild.members:
+                if member.name.lower() == self.player_username.value.lower():
+                    player = member
+                    break
             
-            # Check if the entered username matches the interaction user
-            if self.player_username.value.lower() == interaction.user.name.lower():
-                player_id = str(interaction.user.id)
+            if player:
+                player_id = str(player.id)
             else:
-                # Try to find the player by username
-                player = await interaction.guild.fetch_member_named(self.player_username.value)
-                if player:
-                    player_id = str(player.id)
-                else:
-                    await interaction.response.send_message("Player not found. Please check the username and try again.")
-                    return
+                await interaction.response.send_message("Player not found. Please check the username and try again.")
+                return
 
-            db.Players.update_one(
-                {'PlayerID': player_id},
-                {'$set': {'PlayerName': self.player_username.value}},
-                upsert=True
-            )
+        db.Players.update_one(
+            {'PlayerID': player_id},
+            {'$set': {'PlayerName': self.player_username.value}},
+            upsert=True
+        )
             player_id = str(interaction.user.id)
         
             duoer = db.Duoers.find_one({'DuoerName': self.duoer_name.value})
