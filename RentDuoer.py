@@ -74,33 +74,32 @@ class BookingModal(nextcord.ui.Modal):
         self.add_item(self.rent_time)
 
     async def callback(self, interaction: nextcord.Interaction):
-    try:
-        db = get_database_connection()
-        
-        # Check if the entered username matches the interaction user
-        if self.player_username.value.lower() == interaction.user.name.lower():
-            player_id = str(interaction.user.id)
-        else:
-            # Try to find the player by username
-            player = None
-            for member in interaction.guild.members:
-                if member.name.lower() == self.player_username.value.lower():
-                    player = member
-                    break
+        try:
+            db = get_database_connection()
             
-            if player:
-                player_id = str(player.id)
+            # Check if the entered username matches the interaction user
+            if self.player_username.value.lower() == interaction.user.name.lower():
+                player_id = str(interaction.user.id)
             else:
-                await interaction.response.send_message("Player not found. Please check the username and try again.")
-                return
+                # Try to find the player by username
+                player = None
+                for member in interaction.guild.members:
+                    if member.name.lower() == self.player_username.value.lower():
+                        player = member
+                        break
+                
+                if player:
+                    player_id = str(player.id)
+                else:
+                    await interaction.response.send_message("Player not found. Please check the username and try again.")
+                    return
 
-        db.Players.update_one(
-            {'PlayerID': player_id},
-            {'$set': {'PlayerName': self.player_username.value}},
-            upsert=True
-        )
-            player_id = str(interaction.user.id)
-        
+            db.Players.update_one(
+                {'PlayerID': player_id},
+                {'$set': {'PlayerName': self.player_username.value}},
+                upsert=True
+            )
+            
             duoer = db.Duoers.find_one({'DuoerName': self.duoer_name.value})
         
             if duoer:
