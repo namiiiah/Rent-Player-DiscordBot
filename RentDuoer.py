@@ -63,7 +63,7 @@ class MainView(nextcord.ui.View):
 class BookingModal(nextcord.ui.Modal):
     def __init__(self):
         super().__init__(title="Booking Information")
-        self.player_username = nextcord.ui.TextInput(label="Player's Discord Username", placeholder="Enter player's Discord username")
+        self.player_username = nextcord.ui.TextInput(label="Player Identifier", placeholder="Enter @mention, username, or display name")
         self.duoer_name = nextcord.ui.TextInput(label="Duoer Name", placeholder="Enter duoer's name")
         self.rent_hours = nextcord.ui.TextInput(label="Rent Hours", placeholder="Enter number of hours")
         self.rent_time = nextcord.ui.TextInput(label="Rent Time", placeholder="Enter rent time (DD/MM/YYYY HH:MM)")
