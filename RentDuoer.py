@@ -76,73 +76,73 @@ class BookingModal(nextcord.ui.Modal):
         self.add_item(self.rent_time)
 
     async def callback(self, interaction: nextcord.Interaction):
-    try:
-        await interaction.response.defer()
-        db = get_database_connection()
+        try:
+            await interaction.response.defer()
+            db = get_database_connection()
         
-        print(f"Debug: Searching for player: {self.player_username.value}")
-        print(f"Debug: Guild members: {[member.name for member in interaction.guild.members]}")
+            print(f"Debug: Searching for player: {self.player_username.value}")
+            print(f"Debug: Guild members: {[member.name for member in interaction.guild.members]}")
             
-            # Check if the input is a user mention
-            if self.player_username.value.startswith('<@') and self.player_username.value.endswith('>'):
-                player_id = self.player_username.value[2:-1]
-                if player_id.startswith('!'):
-                    player_id = player_id[1:]
-                player = interaction.guild.get_member(int(player_id))
-                print(f"Debug: Mention detected. Player ID: {player_id}, Player found: {player is not None}")
-            else:
-                # Try to find the player by username or display name
-                player = None
-                for member in interaction.guild.members:
-                    if member.name.lower() == self.player_username.value.lower() or \
-                       member.display_name.lower() == self.player_username.value.lower():
-                        player = member
-                        break
-                print(f"Debug: Name search. Player found: {player is not None}")
+                # Check if the input is a user mention
+                if self.player_username.value.startswith('<@') and self.player_username.value.endswith('>'):
+                    player_id = self.player_username.value[2:-1]
+                    if player_id.startswith('!'):
+                        player_id = player_id[1:]
+                    player = interaction.guild.get_member(int(player_id))
+                    print(f"Debug: Mention detected. Player ID: {player_id}, Player found: {player is not None}")
+                else:
+                    # Try to find the player by username or display name
+                    player = None
+                    for member in interaction.guild.members:
+                        if member.name.lower() == self.player_username.value.lower() or \
+                           member.display_name.lower() == self.player_username.value.lower():
+                            player = member
+                            break
+                    print(f"Debug: Name search. Player found: {player is not None}")
             
-            if player:
-                player_id = str(player.id)
-                print(f"Debug: Player found. ID: {player_id}")
-            else:
-                await interaction.response.send_message("Player not found. Please check the username, display name, or use @mention and try again.")
-                return
+                if player:
+                    player_id = str(player.id)
+                    print(f"Debug: Player found. ID: {player_id}")
+                else:
+                    await interaction.response.send_message("Player not found. Please check the username, display name, or use @mention and try again.")
+                    return
 
-            db.Players.update_one(
-                {'PlayerID': player_id},
-                {'$set': {'PlayerName': self.player_username.value}},
-                upsert=True
-            )
+                db.Players.update_one(
+                    {'PlayerID': player_id},
+                    {'$set': {'PlayerName': self.player_username.value}},
+                    upsert=True
+                )
             
-            duoer = db.Duoers.find_one({'DuoerName': self.duoer_name.value})
+                duoer = db.Duoers.find_one({'DuoerName': self.duoer_name.value})
         
-            if duoer:
-                duoer_id = duoer['DuoerID']
-                price_per_hour = duoer['PricePerHour']
-                requested_start_time = datetime.strptime(self.rent_time.value, "%d/%m/%Y %H:%M")
-                rent_hours = float(self.rent_hours.value)
-                total_price = int(rent_hours * price_per_hour)
+                if duoer:
+                    duoer_id = duoer['DuoerID']
+                    price_per_hour = duoer['PricePerHour']
+                    requested_start_time = datetime.strptime(self.rent_time.value, "%d/%m/%Y %H:%M")
+                    rent_hours = float(self.rent_hours.value)
+                    total_price = int(rent_hours * price_per_hour)
             
-                db.Rentals.insert_one({
-                    'PlayerID': player_id,
-                    'DuoerID': duoer_id,
-                    'RequestedDuration': rent_hours,
-                    'TotalPrice': total_price,
-                    'RequestedStartTime': requested_start_time,
-                    'Status': 'Pending'
-                })
+                    db.Rentals.insert_one({
+                        'PlayerID': player_id,
+                        'DuoerID': duoer_id,
+                        'RequestedDuration': rent_hours,
+                        'TotalPrice': total_price,
+                        'RequestedStartTime': requested_start_time,
+                        'Status': 'Pending'
+                    })
             
-                view = AcceptDeclineView(player_id, duoer_id, rent_hours, requested_start_time)
-                await interaction.channel.send(f"New booking request from <@{player_id}> for <@{duoer_id}>. Total price: {total_price // 1000}K VND. Requested start time: {requested_start_time}. Please accept or decline:", view=view)
+                    view = AcceptDeclineView(player_id, duoer_id, rent_hours, requested_start_time)
+                    await interaction.channel.send(f"New booking request from <@{player_id}> for <@{duoer_id}>. Total price: {total_price // 1000}K VND. Requested start time: {requested_start_time}. Please accept or decline:", view=view)
             
-                await interaction.response.send_message("Booking request submitted. Waiting for duoer's confirmation.")
-            else:
-                await interaction.response.send_message("Duoer not found. Please check the name and try again.")
+                    await interaction.response.send_message("Booking request submitted. Waiting for duoer's confirmation.")
+                else:
+                    await interaction.response.send_message("Duoer not found. Please check the name and try again.")
     
-        except PyMongoError as e:
-            await interaction.response.send_message(f"A database error occurred: {str(e)}")
-        except Exception as e:
-            print(f"Debug: An error occurred: {str(e)}")
-            await interaction.followup.send(f"An error occurred: {str(e)}")
+            except PyMongoError as e:
+                await interaction.response.send_message(f"A database error occurred: {str(e)}")
+            except Exception as e:
+                print(f"Debug: An error occurred: {str(e)}")
+                await interaction.followup.send(f"An error occurred: {str(e)}")
 
 # Register modal
 class RegisterModal(nextcord.ui.Modal):
