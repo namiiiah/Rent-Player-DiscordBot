@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 import os
 import pymongo
 from pymongo.errors import PyMongoError
+from threading import Thread
+from flask import Flask
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
@@ -391,5 +393,24 @@ bot.rental_timer = RentalTimer(bot)
 async def on_ready():
     print(f'We have logged in as {bot.user}')
 
+# Alive
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "I'm alive"
+
+def run():
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# Call this function before running the bot
+keep_alive()
+
 # Run the bot
-bot.run(TOKEN)
+if __name__ == "__main__":
+    keep_alive()
+    bot.run(TOKEN)
