@@ -75,34 +75,34 @@ class BookingModal(nextcord.ui.Modal):
         self.add_item(self.rent_time)
 
     async def callback(self, interaction: nextcord.Interaction):
-    try:
-        db = get_database_connection()
-        
-        print(f"Debug: Searching for player: {self.player_username.value}")
-        
-        # Check if the input is a user mention
-        if self.player_username.value.startswith('<@') and self.player_username.value.endswith('>'):
-            player_id = self.player_username.value[2:-1]
-            if player_id.startswith('!'):
-                player_id = player_id[1:]
-            player = interaction.guild.get_member(int(player_id))
-            print(f"Debug: Mention detected. Player ID: {player_id}, Player found: {player is not None}")
-        else:
-            # Try to find the player by username or display name
-            player = None
-            for member in interaction.guild.members:
-                if member.name.lower() == self.player_username.value.lower() or \
-                   member.display_name.lower() == self.player_username.value.lower():
-                    player = member
-                    break
-            print(f"Debug: Name search. Player found: {player is not None}")
-        
-        if player:
-            player_id = str(player.id)
-            print(f"Debug: Player found. ID: {player_id}")
-        else:
-            await interaction.response.send_message("Player not found. Please check the username, display name, or use @mention and try again.")
-            return
+        try:
+            db = get_database_connection()
+            
+            print(f"Debug: Searching for player: {self.player_username.value}")
+            
+            # Check if the input is a user mention
+            if self.player_username.value.startswith('<@') and self.player_username.value.endswith('>'):
+                player_id = self.player_username.value[2:-1]
+                if player_id.startswith('!'):
+                    player_id = player_id[1:]
+                player = interaction.guild.get_member(int(player_id))
+                print(f"Debug: Mention detected. Player ID: {player_id}, Player found: {player is not None}")
+            else:
+                # Try to find the player by username or display name
+                player = None
+                for member in interaction.guild.members:
+                    if member.name.lower() == self.player_username.value.lower() or \
+                       member.display_name.lower() == self.player_username.value.lower():
+                        player = member
+                        break
+                print(f"Debug: Name search. Player found: {player is not None}")
+            
+            if player:
+                player_id = str(player.id)
+                print(f"Debug: Player found. ID: {player_id}")
+            else:
+                await interaction.response.send_message("Player not found. Please check the username, display name, or use @mention and try again.")
+                return
 
             db.Players.update_one(
                 {'PlayerID': player_id},
@@ -428,7 +428,9 @@ def home():
     return "I'm alive"
 
 def run():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
+    print(f"Flask app is running on port {port}")
 
 def keep_alive():
     t = Thread(target=run)
