@@ -44,8 +44,9 @@ setup_mongodb()
 # Slash command
 @bot.slash_command(name="hi", description="Show booking and register options")
 async def hi(interaction: nextcord.Interaction):
+    await interaction.response.defer()
     view = MainView()
-    await interaction.response.send_message("Choose an option:", view=view)
+    await interaction.followup.send("Choose an option:", view=view)
 
 # Main view with booking and register buttons
 class MainView(nextcord.ui.View):
@@ -75,10 +76,12 @@ class BookingModal(nextcord.ui.Modal):
         self.add_item(self.rent_time)
 
     async def callback(self, interaction: nextcord.Interaction):
-        try:
-            db = get_database_connection()
-            
-            print(f"Debug: Searching for player: {self.player_username.value}")
+    try:
+        await interaction.response.defer()
+        db = get_database_connection()
+        
+        print(f"Debug: Searching for player: {self.player_username.value}")
+        print(f"Debug: Guild members: {[member.name for member in interaction.guild.members]}")
             
             # Check if the input is a user mention
             if self.player_username.value.startswith('<@') and self.player_username.value.endswith('>'):
@@ -138,7 +141,8 @@ class BookingModal(nextcord.ui.Modal):
         except PyMongoError as e:
             await interaction.response.send_message(f"A database error occurred: {str(e)}")
         except Exception as e:
-            await interaction.response.send_message(f"An error occurred: {str(e)}")
+            print(f"Debug: An error occurred: {str(e)}")
+            await interaction.followup.send(f"An error occurred: {str(e)}")
 
 # Register modal
 class RegisterModal(nextcord.ui.Modal):
@@ -419,6 +423,9 @@ bot.rental_timer = RentalTimer(bot)
 @bot.event
 async def on_ready():
     print(f'We have logged in as {bot.user}')
+    for guild in bot.guilds:
+        print(f"Connected to guild: {guild.name} (id: {guild.id})")
+        print(f"Member count: {guild.member_count}")
 
 # Alive
 app = Flask('')
@@ -433,8 +440,14 @@ def run():
     print(f"Flask app is running on port {port}")
 
 def keep_alive():
-    t = Thread(target=run)
-    t.start()
+    def run():
+        port = int(os.environ.get('PORT', 8080))
+        app.run(host='0.0.0.0', port=port)
+        print(f"Flask app is running on port {port}")
+    
+    server = Thread(target=run)
+    server.start()
+    print("Keep alive thread started")
 
 # Call this function before running the bot
 keep_alive()
