@@ -17,6 +17,7 @@ mongoURI = os.getenv('mongo_URI')
 # Bot setup
 intents = nextcord.Intents.default()
 intents.message_content = True
+intents.members = True
 bot = commands.Bot(command_prefix='/', intents=intents)
 
 def setup_mongodb():
@@ -77,12 +78,15 @@ class BookingModal(nextcord.ui.Modal):
     try:
         db = get_database_connection()
         
+        print(f"Debug: Searching for player: {self.player_username.value}")
+        
         # Check if the input is a user mention
         if self.player_username.value.startswith('<@') and self.player_username.value.endswith('>'):
             player_id = self.player_username.value[2:-1]
             if player_id.startswith('!'):
                 player_id = player_id[1:]
             player = interaction.guild.get_member(int(player_id))
+            print(f"Debug: Mention detected. Player ID: {player_id}, Player found: {player is not None}")
         else:
             # Try to find the player by username or display name
             player = None
@@ -91,9 +95,11 @@ class BookingModal(nextcord.ui.Modal):
                    member.display_name.lower() == self.player_username.value.lower():
                     player = member
                     break
+            print(f"Debug: Name search. Player found: {player is not None}")
         
         if player:
             player_id = str(player.id)
+            print(f"Debug: Player found. ID: {player_id}")
         else:
             await interaction.response.send_message("Player not found. Please check the username, display name, or use @mention and try again.")
             return
