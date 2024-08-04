@@ -68,12 +68,16 @@ class MainView(nextcord.ui.View):
     @nextcord.ui.button(label="Register", style=nextcord.ButtonStyle.secondary)
     async def register_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         await interaction.response.send_modal(RegisterModal())
+        
+    @nextcord.ui.button(label="Request", style=nextcord.ButtonStyle.success)
+    async def request_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+        await interaction.response.send_modal(RequestModal())
 
 # Booking modal
 class BookingModal(nextcord.ui.Modal):
     def __init__(self):
         super().__init__(title="Booking Information")
-        self.player_username = nextcord.ui.TextInput(label="Player Username", placeholder="Enter username, or display name")
+        self.player_username = nextcord.ui.TextInput(label="Player Username", placeholder="Enter @mention, username, or display name")
         self.duoer_name = nextcord.ui.TextInput(label="Duoer Name", placeholder="Enter duoer's name")
         self.rent_hours = nextcord.ui.TextInput(label="Rent Hours", placeholder="Enter number of hours")
         self.rent_time = nextcord.ui.TextInput(label="Rent Time", placeholder="Enter rent time (DD/MM/YYYY HH:MM)")
@@ -255,6 +259,45 @@ class RegisterModal(nextcord.ui.Modal):
             await interaction.response.send_message(f"A database error occurred: {str(e)}. Please try again or contact an administrator.")
         except Exception as e:
             await interaction.response.send_message(f"An error occurred: {str(e)}. Please try again or contact an administrator.")
+
+class RequestModal(nextcord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="Request Information")
+        
+        self.request_info = nextcord.ui.TextInput(
+            label="Booking Request",
+            style=nextcord.TextInputStyle.paragraph,
+            placeholder="Enter the booking request details",
+            required=True,
+            max_length=1000
+        )
+        
+        self.add_item(self.request_info)
+
+    async def callback(self, interaction: nextcord.Interaction):
+        try:
+            await interaction.response.defer()
+        except nextcord.errors.NotFound:
+            print("Interaction has already been responded to or timed out")
+            return
+
+        try:
+            # Prepare the request summary
+            summary = f"@Duoer New booking request:\n\n"
+            summary += self.request_info.value
+
+            # Get the Duoer role
+            duoer_role = nextcord.utils.get(interaction.guild.roles, name="Duoer")
+            if duoer_role:
+                summary = f"{duoer_role.mention} {summary}"
+            else:
+                summary += "\n\nWarning: Couldn't find the 'Duoer' role to mention."
+
+            await interaction.followup.send(summary)
+        except Exception as e:
+            error_message = f"An error occurred: {str(e)}"
+            print(f"Debug: {error_message}")
+            await interaction.followup.send(error_message)
     
 class AcceptDeclineView(nextcord.ui.View):
     def __init__(self, player_id, duoer_id, rent_hours, requested_start_time):
