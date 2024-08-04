@@ -81,8 +81,8 @@ class MainView(nextcord.ui.View):
 class BookingModal(nextcord.ui.Modal):
     def __init__(self):
         super().__init__(title="Booking Information")
-        self.player_username = nextcord.ui.TextInput(label="Boss Username", placeholder="Enter username, or display name")
-        self.duoer_name = nextcord.ui.TextInput(label="Player Name", placeholder="Enter player's name")
+        self.boss_username = nextcord.ui.TextInput(label="Boss Username", placeholder="Enter username")
+        self.player_name = nextcord.ui.TextInput(label="Player Name", placeholder="Enter player's name")
         self.rent_hours = nextcord.ui.TextInput(label="Rent Hours", placeholder="Enter number of hours")
         self.rent_time = nextcord.ui.TextInput(label="Rent Time", placeholder="Enter rent time (DD/MM/YYYY HH:MM)")
         
@@ -247,7 +247,7 @@ class RegisterModal(nextcord.ui.Modal):
             )
         
             # Prepare summary of registered information
-            summary = f"Registration submitted for {name}. Your information has been stored:\n\n"
+            summary = f"Registration submitted for {name}. Your information has been stored:\n"
             summary += f"Player ID: {interaction.user.id}\n"
             summary += f"Name: {name}\n"
             summary += f"Birthday: {birthday}\n"
