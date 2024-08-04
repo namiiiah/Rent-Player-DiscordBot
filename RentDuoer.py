@@ -44,9 +44,17 @@ setup_mongodb()
 # Slash command
 @bot.slash_command(name="hi", description="Show booking and register options")
 async def hi(interaction: nextcord.Interaction):
-    await interaction.response.defer()
-    view = MainView()
-    await interaction.followup.send("Choose an option:", view=view)
+    try:
+        await interaction.response.defer()
+    except nextcord.errors.NotFound:
+        # Interaction has already been responded to or timed out
+        return
+
+    try:
+        view = MainView()
+        await interaction.followup.send("Choose an option:", view=view)
+    except nextcord.errors.HTTPException as e:
+        print(f"Error sending followup: {e}")
 
 # Main view with booking and register buttons
 class MainView(nextcord.ui.View):
@@ -78,6 +86,11 @@ class BookingModal(nextcord.ui.Modal):
     async def callback(self, interaction: nextcord.Interaction):
         try:
             await interaction.response.defer()
+        except nextcord.errors.NotFound:
+            print("Interaction has already been responded to or timed out")
+            return
+
+        try:
             db = get_database_connection()
         
             print(f"Debug: Searching for player: {self.player_username.value}")
@@ -95,7 +108,7 @@ class BookingModal(nextcord.ui.Modal):
                 player = None
                 for member in interaction.guild.members:
                     if member.name.lower() == self.player_username.value.lower() or \
-                        member.display_name.lower() == self.player_username.value.lower():
+                       member.display_name.lower() == self.player_username.value.lower():
                         player = member
                         break
                 print(f"Debug: Name search. Player found: {player is not None}")
@@ -104,7 +117,7 @@ class BookingModal(nextcord.ui.Modal):
                 player_id = str(player.id)
                 print(f"Debug: Player found. ID: {player_id}")
             else:
-                await interaction.response.send_message("Player not found. Please check the username, display name, or use @mention and try again.")
+                await interaction.followup.send("Player not found. Please check the username, display name, or use @mention and try again.")
                 return
 
             db.Players.update_one(
@@ -134,15 +147,18 @@ class BookingModal(nextcord.ui.Modal):
                 view = AcceptDeclineView(player_id, duoer_id, rent_hours, requested_start_time)
                 await interaction.channel.send(f"New booking request from <@{player_id}> for <@{duoer_id}>. Total price: {total_price // 1000}K VND. Requested start time: {requested_start_time}. Please accept or decline:", view=view)
             
-                await interaction.response.send_message("Booking request submitted. Waiting for duoer's confirmation.")
+                await interaction.followup.send("Booking request submitted. Waiting for duoer's confirmation.")
             else:
-                await interaction.response.send_message("Duoer not found. Please check the name and try again.")
+                await interaction.followup.send("Duoer not found. Please check the name and try again.")
     
         except PyMongoError as e:
-            await interaction.response.send_message(f"A database error occurred: {str(e)}")
+            error_message = f"A database error occurred: {str(e)}"
+            print(error_message)
+            await interaction.followup.send(error_message)
         except Exception as e:
-            print(f"Debug: An error occurred: {str(e)}")
-            await interaction.followup.send(f"An error occurred: {str(e)}")
+            error_message = f"An error occurred: {str(e)}"
+            print(f"Debug: {error_message}")
+            await interaction.followup.send(error_message)
 
 # Register modal
 class RegisterModal(nextcord.ui.Modal):
