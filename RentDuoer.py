@@ -268,8 +268,7 @@ class RequestModal(nextcord.ui.Modal):
             label="Booking Request",
             style=nextcord.TextInputStyle.paragraph,
             placeholder="Enter the booking request details",
-            required=True,
-            max_length=1000
+            required=True
         )
         
         self.add_item(self.request_info)
