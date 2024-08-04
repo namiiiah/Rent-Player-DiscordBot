@@ -24,19 +24,19 @@ def setup_mongodb():
     db = get_database_connection()
     
     # Create collections if they don't exist
+    if 'Boss' not in db.list_collection_names():
+        db.create_collection('Boss')
+    
     if 'Players' not in db.list_collection_names():
         db.create_collection('Players')
-    
-    if 'Duoers' not in db.list_collection_names():
-        db.create_collection('Duoers')
     
     if 'Rentals' not in db.list_collection_names():
         db.create_collection('Rentals')
 
     # Create indexes
+    db.Boss.create_index('BossID', unique=True)
     db.Players.create_index('PlayerID', unique=True)
-    db.Duoers.create_index('DuoerID', unique=True)
-    db.Rentals.create_index([('PlayerID', 1), ('DuoerID', 1), ('RequestedStartTime', 1)])
+    db.Rentals.create_index([('BossID', 1), ('PlayerID', 1), ('RequestedStartTime', 1)])
 
 # Call this function when your bot starts
 setup_mongodb()
@@ -71,19 +71,23 @@ class MainView(nextcord.ui.View):
         
     @nextcord.ui.button(label="Request", style=nextcord.ButtonStyle.success)
     async def request_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        await interaction.response.send_modal(RequestModal())
+        customer_role = nextcord.utils.get(interaction.guild.roles, name="Customer")
+        if customer_role and customer_role in interaction.user.roles:
+            await interaction.response.send_modal(RequestModal())
+        else:
+            await interaction.response.send_message("You need the 'Customer' role to use this feature.", ephemeral=True)
 
 # Booking modal
 class BookingModal(nextcord.ui.Modal):
     def __init__(self):
         super().__init__(title="Booking Information")
-        self.player_username = nextcord.ui.TextInput(label="Player Username", placeholder="Enter @mention, username, or display name")
-        self.duoer_name = nextcord.ui.TextInput(label="Duoer Name", placeholder="Enter duoer's name")
+        self.player_username = nextcord.ui.TextInput(label="Boss Username", placeholder="Enter username, or display name")
+        self.duoer_name = nextcord.ui.TextInput(label="Player Name", placeholder="Enter player's name")
         self.rent_hours = nextcord.ui.TextInput(label="Rent Hours", placeholder="Enter number of hours")
         self.rent_time = nextcord.ui.TextInput(label="Rent Time", placeholder="Enter rent time (DD/MM/YYYY HH:MM)")
         
-        self.add_item(self.player_username)
-        self.add_item(self.duoer_name)
+        self.add_item(self.boss_username)
+        self.add_item(self.player_name)
         self.add_item(self.rent_hours)
         self.add_item(self.rent_time)
 
@@ -97,63 +101,63 @@ class BookingModal(nextcord.ui.Modal):
         try:
             db = get_database_connection()
         
-            print(f"Debug: Searching for player: {self.player_username.value}")
+            print(f"Debug: Searching for boss: {self.boss_username.value}")
             print(f"Debug: Guild members: {[member.name for member in interaction.guild.members]}")
             
             # Check if the input is a user mention
-            if self.player_username.value.startswith('<@') and self.player_username.value.endswith('>'):
-                player_id = self.player_username.value[2:-1]
-                if player_id.startswith('!'):
-                    player_id = player_id[1:]
-                player = interaction.guild.get_member(int(player_id))
-                print(f"Debug: Mention detected. Player ID: {player_id}, Player found: {player is not None}")
+            if self.boss_username.value.startswith('<@') and self.boss_username.value.endswith('>'):
+                boss_id = self.boss_username.value[2:-1]
+                if boss_id.startswith('!'):
+                    boss_id = boss_id[1:]
+                player = interaction.guild.get_member(int(boss_id))
+                print(f"Debug: Mention detected. Player ID: {boss_id}, Boss found: {boss is not None}")
             else:
                 # Try to find the player by username or display name
-                player = None
+                boss = None
                 for member in interaction.guild.members:
-                    if member.name.lower() == self.player_username.value.lower() or \
-                       member.display_name.lower() == self.player_username.value.lower():
-                        player = member
+                    if member.name.lower() == self.boss_username.value.lower() or \
+                       member.display_name.lower() == self.boss_username.value.lower():
+                        boss = member
                         break
-                print(f"Debug: Name search. Player found: {player is not None}")
+                print(f"Debug: Name search. Boss found: {boss is not None}")
             
-            if player:
-                player_id = str(player.id)
-                print(f"Debug: Player found. ID: {player_id}")
+            if boss:
+                boss_id = str(boss.id)
+                print(f"Debug: Player found. ID: {boss_id}")
             else:
-                await interaction.followup.send("Player not found. Please check the username, display name, or use @mention and try again.")
+                await interaction.followup.send("Boss not found. Please check the username, display name, or use @mention and try again.")
                 return
 
-            db.Players.update_one(
-                {'PlayerID': player_id},
-                {'$set': {'PlayerName': self.player_username.value}},
+            db.Boss.update_one(
+                {'BossID': boss_id},
+                {'$set': {'BossName': self.boss_username.value}},
                 upsert=True
             )
             
-            duoer = db.Duoers.find_one({'DuoerName': self.duoer_name.value})
+            player = db.Players.find_one({'PlayerName': self.player_name.value})
         
-            if duoer:
-                duoer_id = duoer['DuoerID']
-                price_per_hour = duoer['PricePerHour']
+            if player:
+                player_id = player['PlayerID']
+                price_per_hour = player['PricePerHour']
                 requested_start_time = datetime.strptime(self.rent_time.value, "%d/%m/%Y %H:%M")
                 rent_hours = float(self.rent_hours.value)
                 total_price = int(rent_hours * price_per_hour)
             
                 db.Rentals.insert_one({
+                    'BossID': boss_id,
                     'PlayerID': player_id,
-                    'DuoerID': duoer_id,
                     'RequestedDuration': rent_hours,
                     'TotalPrice': total_price,
                     'RequestedStartTime': requested_start_time,
                     'Status': 'Pending'
                 })
             
-                view = AcceptDeclineView(player_id, duoer_id, rent_hours, requested_start_time)
-                await interaction.channel.send(f"New booking request from <@{player_id}> for <@{duoer_id}>. Total price: {total_price // 1000}K VND. Requested start time: {requested_start_time}. Please accept or decline:", view=view)
+                view = AcceptDeclineView(boss_id, player_id, rent_hours, requested_start_time)
+                await interaction.channel.send(f"New booking request from <@{boss_id}> for <@{player_id}>. Total price: {total_price // 1000}K VND. Requested start time: {requested_start_time}. Please accept or decline:", view=view)
             
-                await interaction.followup.send("Booking request submitted. Waiting for duoer's confirmation.")
+                await interaction.followup.send("Booking request submitted. Waiting for player's confirmation.")
             else:
-                await interaction.followup.send("Duoer not found. Please check the name and try again.")
+                await interaction.followup.send("Player not found. Please check the name and try again.")
     
         except PyMongoError as e:
             error_message = f"A database error occurred: {str(e)}"
@@ -167,7 +171,7 @@ class BookingModal(nextcord.ui.Modal):
 # Register modal
 class RegisterModal(nextcord.ui.Modal):
     def __init__(self):
-        super().__init__(title="Register as Duoer", timeout=5 * 60)
+        super().__init__(title="Register as Player", timeout=5 * 60)
         
         self.personal_info = nextcord.ui.TextInput(
             label="Name, Birthday, City, Show Cam (yes/no)",
@@ -225,11 +229,11 @@ class RegisterModal(nextcord.ui.Modal):
             price_in_vnd = int(float(self.price.value.replace('K', '')) * 1000)
 
             db = get_database_connection()
-            db.Duoers.update_one(
-                {'DuoerID': str(interaction.user.id)},
+            db.Players.update_one(
+                {'PlayerID': str(interaction.user.id)},
                 {
                     '$set': {
-                        'DuoerName': name,
+                        'PlayerName': name,
                         'Birthday': birthday,
                         'City': city,
                         'ShowCam': show_cam,
@@ -244,7 +248,7 @@ class RegisterModal(nextcord.ui.Modal):
         
             # Prepare summary of registered information
             summary = f"Registration submitted for {name}. Your information has been stored:\n\n"
-            summary += f"Duoer ID: {interaction.user.id}\n"
+            summary += f"Player ID: {interaction.user.id}\n"
             summary += f"Name: {name}\n"
             summary += f"Birthday: {birthday}\n"
             summary += f"City: {city}\n"
@@ -282,34 +286,31 @@ class RequestModal(nextcord.ui.Modal):
 
         try:
             # Prepare the request summary
-            summary = f"New booking request:\n\n"
+            summary = f"New booking request:\n"
             summary += self.request_info.value
 
-            # Get the Duoer role
-            duoer_role = nextcord.utils.get(interaction.guild.roles, name="Duoer")
-            if duoer_role:
-                summary = f"{duoer_role.mention} {summary}"
-            else:
-                summary += "\n\nWarning: Couldn't find the 'Duoer' role to mention."
+            # Get the Player role ID
+            player_role_id = 1269185895995805708
+            summary = f"<@&{player_role_id}> {summary}"
 
-            await interaction.followup.send(summary)
+            await interaction.followup.send(summary, allowed_mentions=nextcord.AllowedMentions(roles=True))
         except Exception as e:
             error_message = f"An error occurred: {str(e)}"
             print(f"Debug: {error_message}")
             await interaction.followup.send(error_message)
     
 class AcceptDeclineView(nextcord.ui.View):
-    def __init__(self, player_id, duoer_id, rent_hours, requested_start_time):
+    def __init__(self, boss_id, player_id, rent_hours, requested_start_time):
         super().__init__(timeout=None)
+        self.boss_id = boss_id
         self.player_id = player_id
-        self.duoer_id = duoer_id
         self.rent_hours = rent_hours
         self.requested_start_time = requested_start_time
 
     @nextcord.ui.button(label="Accept", style=nextcord.ButtonStyle.green)
     async def accept(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        if str(interaction.user.id) != str(self.duoer_id):
-            await interaction.response.send_message("Only the duoer can accept this booking.", ephemeral=True)
+        if str(interaction.user.id) != str(self.player_id):
+            await interaction.response.send_message("Only the player can accept this booking.", ephemeral=True)
             return
 
         actual_start_time = datetime.now()
@@ -317,8 +318,8 @@ class AcceptDeclineView(nextcord.ui.View):
         try:
             result = db.Rentals.update_one(
                 {
+                    'BossID': self.boss_id,
                     'PlayerID': self.player_id,
-                    'DuoerID': self.duoer_id,
                     'RequestedStartTime': self.requested_start_time,
                     'Status': 'Pending'
                 },
@@ -332,7 +333,7 @@ class AcceptDeclineView(nextcord.ui.View):
         
             if result.modified_count > 0:
                 # Start the timer when the booking is accepted
-                await bot.rental_timer.start_timer(self.player_id, self.duoer_id, self.rent_hours, interaction.channel.id, actual_start_time)
+                await bot.rental_timer.start_timer(self.boss_id, self.player_id, self.rent_hours, interaction.channel.id, actual_start_time)
             
                 await interaction.response.send_message(f"Booking accepted! The countdown has started at {actual_start_time}.")
             else:
@@ -344,16 +345,16 @@ class AcceptDeclineView(nextcord.ui.View):
 
     @nextcord.ui.button(label="Decline", style=nextcord.ButtonStyle.red)
     async def decline(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        if str(interaction.user.id) != str(self.duoer_id):
-            await interaction.response.send_message("Only the duoer can decline this booking.", ephemeral=True)
+        if str(interaction.user.id) != str(self.player_id):
+            await interaction.response.send_message("Only the player can decline this booking.", ephemeral=True)
             return
 
         db = get_database_connection()
         try:
             result = db.Rentals.update_one(
                 {
+                    'BossID': self.boss_id,
                     'PlayerID': self.player_id,
-                    'DuoerID': self.duoer_id,
                     'RequestedStartTime': self.requested_start_time,
                     'Status': 'Pending'
                 },
@@ -365,7 +366,7 @@ class AcceptDeclineView(nextcord.ui.View):
             )
 
             if result.modified_count > 0:
-                decline_message = f"<@{self.player_id}> Your booking has been declined by the duoer."
+                decline_message = f"<@{self.boss_id}> Your booking has been declined by the player."
                 await interaction.response.send_message(decline_message)
             else:
                 await interaction.response.send_message("Unable to decline the booking. It may have been cancelled or already processed.")
@@ -380,48 +381,48 @@ class RentalTimer:
         self.active_rentals = {}
         self.check_rentals.start()
 
-    async def start_timer(self, player_id, duoer_id, duration, channel_id, start_time):
+    async def start_timer(self, boss_id, player_id, duration, channel_id, start_time):
         end_time = start_time + timedelta(hours=duration)
-        self.active_rentals[(player_id, duoer_id)] = (end_time, channel_id, start_time)
+        self.active_rentals[(boss_id, player_id)] = (end_time, channel_id, start_time)
         
         # Start the digital clock with End Early button
-        await self.run_digital_clock(player_id, duoer_id, duration, channel_id, start_time)
+        await self.run_digital_clock(boss_id, player_id, duration, channel_id, start_time)
 
-    async def run_digital_clock(self, player_id, duoer_id, duration, channel_id, start_time):
+    async def run_digital_clock(self, boss_id, player_id, duration, channel_id, start_time):
         channel = self.bot.get_channel(channel_id)
         if channel:
-            view = EndEarlyView(player_id, duoer_id, self)
+            view = EndEarlyView(boss_id, player_id, self)
             message = await channel.send("Rental time remaining: ", view=view)
             end_time = start_time + timedelta(hours=duration)
             
-            while datetime.now() < end_time and (player_id, duoer_id) in self.active_rentals:
+            while datetime.now() < end_time and (boss_id, player_id) in self.active_rentals:
                 time_left = end_time - datetime.now()
                 hours, remainder = divmod(time_left.seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
                 await message.edit(content=f"Rental time remaining: {hours:02d}:{minutes:02d}:{seconds:02d}", view=view)
                 await asyncio.sleep(1)
             
-            if (player_id, duoer_id) in self.active_rentals:
-                await self.end_rental(player_id, duoer_id, end_time)
+            if (boss_id, player_id) in self.active_rentals:
+                await self.end_rental(boss_id, player_id, end_time)
             await message.edit(content="Rental time has ended!", view=None)
 
-    async def end_rental(self, player_id, duoer_id, end_time, ended_early=False):
-        if (player_id, duoer_id) in self.active_rentals:
-            _, channel_id, start_time = self.active_rentals[(player_id, duoer_id)]
-            del self.active_rentals[(player_id, duoer_id)]
+    async def end_rental(self, boss_id, player_id, end_time, ended_early=False):
+        if (boss_id, player_id) in self.active_rentals:
+            _, channel_id, start_time = self.active_rentals[(boss_id, player_id)]
+            del self.active_rentals[(boss_id, player_id)]
             
             actual_duration = (end_time - start_time).total_seconds() / 3600  # in hours
             
-            await self.complete_rental(player_id, duoer_id, channel_id, end_time, actual_duration, ended_early)
+            await self.complete_rental(boss_id, player_id, channel_id, end_time, actual_duration, ended_early)
 
-    async def complete_rental(self, player_id, duoer_id, channel_id, end_time, actual_duration, ended_early):
+    async def complete_rental(self, boss_id, player_id, channel_id, end_time, actual_duration, ended_early):
         status = 'Ended Early' if ended_early else 'Completed'
         db = get_database_connection()
         try:
             result = db.Rentals.update_one(
                 {
+                    'BossID': boss_id,
                     'PlayerID': player_id,
-                    'DuoerID': duoer_id,
                     'Status': 'Accepted'
                 },
                 {
@@ -434,44 +435,44 @@ class RentalTimer:
             )
     
             if result.modified_count == 0:
-                print(f"No rental found to complete for player {player_id} and duoer {duoer_id}")
+                print(f"No rental found to complete for boss {boss_id} and player {player_id}")
         except PyMongoError as err:
             print(f"A database error occurred: {err}")
 
         channel = self.bot.get_channel(channel_id)
         if channel:
             if ended_early:
-                await channel.send(f"<@{player_id}> <@{duoer_id}> Rental has ended early. Total duration: {actual_duration:.2f} hours.")
+                await channel.send(f"<@{boss_id}> <@{player_id}> Rental has ended early. Total duration: {actual_duration:.2f} hours.")
             else:
-                await channel.send(f"<@{player_id}> <@{duoer_id}> Rental has been completed. Total duration: {actual_duration:.2f} hours.")
+                await channel.send(f"<@{boss_id}> <@{player_id}> Rental has been completed. Total duration: {actual_duration:.2f} hours.")
                 
     @tasks.loop(minutes=1)
     async def check_rentals(self):
         now = datetime.now()
         ended_rentals = []
 
-        for (player_id, duoer_id), (end_time, channel_id, _) in self.active_rentals.items():
+        for (boss_id, player_id), (end_time, channel_id, _) in self.active_rentals.items():
             if now >= end_time:
-                ended_rentals.append((player_id, duoer_id))
-                await self.end_rental(player_id, duoer_id, end_time, ended_early=False)
+                ended_rentals.append((boss_id, player_id))
+                await self.end_rental(boss_id, player_id, end_time, ended_early=False)
 
     def cog_unload(self):
         self.check_rentals.cancel()
 
 class EndEarlyView(nextcord.ui.View):
-    def __init__(self, player_id, duoer_id, rental_timer):
+    def __init__(self, boss_id, player_id, rental_timer):
         super().__init__(timeout=None)
+        self.boss_id = boss_id
         self.player_id = player_id
-        self.duoer_id = duoer_id
         self.rental_timer = rental_timer
 
     @nextcord.ui.button(label="End Early", style=nextcord.ButtonStyle.danger)
     async def end_early(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
-        if str(interaction.user.id) != self.duoer_id:
-            await interaction.response.send_message("Only the duoer can end the rental early.", ephemeral=True)
+        if str(interaction.user.id) != self.player_id:
+            await interaction.response.send_message("Only the player can end the rental early.", ephemeral=True)
             return
 
-        await self.rental_timer.end_rental(self.player_id, self.duoer_id, datetime.now(), ended_early=True)
+        await self.rental_timer.end_rental(self.boss_id, self.player_id, datetime.now(), ended_early=True)
         await interaction.response.send_message("Rental ended early.")
         self.stop()
         
