@@ -282,7 +282,7 @@ class RequestModal(nextcord.ui.Modal):
 
         try:
             # Prepare the request summary
-            summary = f"@Duoer New booking request:\n\n"
+            summary = f"New booking request:\n\n"
             summary += self.request_info.value
 
             # Get the Duoer role
